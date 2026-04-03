@@ -418,85 +418,9 @@ jobs:
           path: OpenJDK17U-jdk_x64_windows_hotspot_*.zip
           retention-days: 90
 
-  build-macos:
-    name: Build macOS x64
-    needs: prepare
-    runs-on: macos-12
-    timeout-minutes: 360
-    if: |
-      needs.prepare.result == 'success' &&
-      (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'macos-only' || github.event.inputs.platforms == '')
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.tag }}
-      
-      - name: Build Info
-        run: |
-          echo "=========================================="
-          echo "  Tansun JDK 17 Build"
-          echo "=========================================="
-          echo "Tag: ${{ needs.prepare.outputs.tag }}"
-          echo "Version: ${{ needs.prepare.outputs.version }}"
-          echo "Platform: macOS x64"
-          echo "=========================================="
-      
-      - name: Download Temurin binary
-        run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          echo "Downloading Tansun JDK 17: $TAG"
-          
-          wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_x64_mac_hotspot_${VERSION}.tar.gz"
-          
-          echo "Download completed"
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Temurin17-macos-x64-${{ needs.prepare.outputs.version }}
-          path: OpenJDK17U-jdk_x64_mac_hotspot_*.tar.gz
-          retention-days: 90
-
-  build-macos-aarch64:
-    name: Build macOS aarch64
-    needs: prepare
-    runs-on: macos-14
-    timeout-minutes: 360
-    if: |
-      needs.prepare.result == 'success' &&
-      (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == '')
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.tag }}
-      
-      - name: Download Temurin binary
-        run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          echo "Downloading Tansun JDK 17: $TAG (aarch64)"
-          
-          wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_aarch64_mac_hotspot_${VERSION}.tar.gz"
-          
-          echo "Download completed"
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Temurin17-macos-aarch64-${{ needs.prepare.outputs.version }}
-          path: OpenJDK17U-jdk_aarch64_mac_hotspot_*.tar.gz
-          retention-days: 90
-
   create-release:
     name: Create Release
-    needs: [prepare, build-linux, build-windows, build-macos]
+    needs: [prepare, build-linux, build-windows, build-linux-aarch64]
     if: success() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     
@@ -526,9 +450,8 @@ jobs:
             | 平台 | 架构 | 文件 |
             |------|------|------|
             | Linux | x64 | OpenJDK17U-jdk_x64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
+            | Linux | aarch64 | OpenJDK17U-jdk_aarch64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
             | Windows | x64 | OpenJDK17U-jdk_x64_windows_hotspot_${{ needs.prepare.outputs.version }}.zip |
-            | macOS | x64 | OpenJDK17U-jdk_x64_mac_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
-            | macOS | aarch64 | OpenJDK17U-jdk_aarch64_mac_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
             
             ### 验证和说明
             所有文件都包含 SHA256 校验和文件(.sha256.txt)。
