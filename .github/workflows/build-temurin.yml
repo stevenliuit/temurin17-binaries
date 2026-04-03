@@ -301,6 +301,42 @@ jobs:
           
           Write-Host "Download completed"
       
+      - name: Customize JDK
+        shell: powershell
+        run: |
+          $TAG = "${{ needs.prepare.outputs.tag }}"
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          
+          # 解压
+          Expand-Archive -Path "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip" -DestinationPath "." -Force
+          $JDK_DIR = Get-ChildItem -Directory | Where-Object { $_.Name -like "jdk*" } | Select-Object -First 1
+          
+          # 修改 release 文件中的 VENDOR 信息
+          if (Test-Path "$JDK_DIR\release") {
+            (Get-Content "$JDK_DIR\release") -replace 'IMPLEMENTOR="Eclipse Adoptium"', 'IMPLEMENTOR="Tansun"' | Set-Content "$JDK_DIR\release"
+            (Get-Content "$JDK_DIR\release") -replace 'IMPLEMENTOR_VERSION="Temurin"', 'IMPLEMENTOR_VERSION="Tansun-17"' | Set-Content "$JDK_DIR\release"
+            (Get-Content "$JDK_DIR\release") -replace 'JVM_NAME="OpenJDK 64-Bit Server VM"', 'JVM_NAME="Tansun 64-Bit Server VM"' | Set-Content "$JDK_DIR\release"
+            Write-Host "Modified release file"
+          }
+          
+          # 添加 --add-opens 配置到 jvm.options
+          $JVM_OPTS = "$JDK_DIR\lib\jvm.cfg"
+          if (Test-Path "$JDK_DIR\conf\jvm.options") {
+            $JVM_OPTS = "$JDK_DIR\conf\jvm.options"
+          }
+          if (Test-Path $JVM_OPTS) {
+            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.lang=ALL-UNNAMED"
+            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.util=ALL-UNNAMED"
+            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.base=ALL-UNNAMED"
+            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.lang.reflect=ALL-UNNAMED"
+            Write-Host "Added --add-opens to jvm.options"
+          }
+          
+          # 重新打包
+          Compress-Archive -Path "$JDK_DIR\*" -DestinationPath "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip" -Force
+          
+          Write-Host "Package created successfully"
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
