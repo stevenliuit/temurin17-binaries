@@ -122,7 +122,7 @@ jobs:
           echo "Building tag: $TAG"
           
           # 提取版本号
-          VERSION=$(echo "$TAG" | sed 's|^jdk-||' | sed 's|+.*||')
+          VERSION=$(echo "$TAG" | sed 's|^jdk-||' | sed 's|+|_|')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
           
@@ -395,7 +395,7 @@ jobs:
         shell: powershell
         run: |
           $TAG = "${{ needs.prepare.outputs.tag }}"
-          $VERSION = "${{ needs.prepare.outputs.version }}".Replace("+", "_")
+          $VERSION = "${{ needs.prepare.outputs.version }}"
           
           Write-Host "Downloading Tansun JDK 17: $TAG"
           
