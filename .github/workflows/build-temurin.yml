@@ -1,6 +1,7 @@
 name: Build Temurin JDK 17
 
 on:
+  # 手动触发
   workflow_dispatch:
     inputs:
       tag:
@@ -28,13 +29,15 @@ on:
           - windows-only
           - macos-only
 
+  # Push 触发：支持所有标签
   push:
     tags:
-      - 'jdk-17.**'
-      - 'jdk-17.0.*'
+      - 'jdk-17.**'  # 匹配所有jdk-17开头的标签
+      - 'jdk-17.0.*'  # 匹配所有17.0.x版本
 
+  # 定时触发：每天检查新版本
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *'  # 每6小时检查一次
 
 jobs:
   check-latest:
@@ -44,14 +47,18 @@ jobs:
     outputs:
       latest_tag: ${{ steps.check.outputs.latest_tag }}
       has_new_version: ${{ steps.check.outputs.has_new_version }}
-
+    
     steps:
       - name: Check for new Temurin 17 version
         id: check
         run: |
+          # 获取最新标签
           LATEST_TAG=$(curl -s https://api.github.com/repos/adoptium/temurin17-binaries/tags | jq -r '.[0].name')
+          
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           echo "Latest Temurin 17 tag: $LATEST_TAG"
+          
+          # 检查是否有新版本
           if git ls-remote --tags origin | grep -q "$LATEST_TAG"; then
             echo "has_new_version=false" >> $GITHUB_OUTPUT
             echo "No new version"
@@ -64,25 +71,31 @@ jobs:
     name: Sync All Tags from Upstream
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN || secrets.PERSONAL_TOKEN }}
-
+      
       - name: Configure Git
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-
+      
       - name: Sync all tags
         run: |
+          # 添加上游
           git remote add upstream https://github.com/adoptium/temurin17-binaries.git || true
+          
+          # 获取所有标签
           git fetch upstream --tags --force
+          
+          # 推送所有标签
           git push origin --tags --force-with-lease
-          echo "All tags synced"
+          
+          echo "所有标签已同步"
 
   prepare:
     name: Prepare Build Info
@@ -95,11 +108,12 @@ jobs:
       tag: ${{ steps.info.outputs.tag }}
       version: ${{ steps.info.outputs.version }}
       build_number: ${{ steps.info.outputs.build_number }}
-
+    
     steps:
       - name: Determine build info
         id: info
         run: |
+          # 确定要构建的标签
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
@@ -109,12 +123,19 @@ jobs:
           else
             TAG="${{ github.ref }}"
           fi
+          
+          # 清理标签名称
           TAG=$(echo "$TAG" | sed 's|^refs/tags/||')
+          
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Building tag: $TAG"
+          
+          # 提取版本号
           VERSION=$(echo "$TAG" | sed 's|^jdk-||' | sed 's|+.*||')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "version=$VERSION"
+          echo "Version: $VERSION"
+          
+          # 构建号
           echo "build_number=${{ github.run_number }}" >> $GITHUB_OUTPUT
 
   build-linux:
@@ -125,18 +146,18 @@ jobs:
     if: |
       needs.prepare.result == 'success' &&
       (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'linux-only' || github.event.inputs.platforms == '')
-
+    
     steps:
       - name: Checkout Temurin JDK 17
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
-
+      
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Temurin JDK 17 Build"
+          echo "  Steven JDK 17 Build"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
@@ -144,14 +165,14 @@ jobs:
           echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}"
           echo "Platform: Linux x64"
           echo "=========================================="
-
+      
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android/sdk
           sudo rm -rf /opt/ghc
           df -h
-
+      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -161,28 +182,33 @@ jobs:
             libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev \
             autoconf automake libtool make zip unzip ccache \
             git wget curl python3 python3-dev jq
-
+      
       - name: Download Temurin source
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           echo "Downloading Temurin JDK 17 source: $TAG"
+          
+          # 从Release下载源码
           wget -q "https://github.com/adoptium/temurin17-binaries/archive/refs/tags/${TAG}.tar.gz" \
             -O temurin17-source.tar.gz || \
           wget -q "https://github.com/adoptium/temurin17-binaries/archive/${TAG}.tar.gz" \
             -O temurin17-source.tar.gz
+          
           tar -xzf temurin17-source.tar.gz
           cd temurin17-binaries-* || cd temurin17-binaries
+          
           echo "Source downloaded successfully"
           ls -la
-
+      
       - name: Install Boot JDK 17
         run: |
+          # 下载 JDK 17 作为 Boot JDK
           wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
           tar -xzf OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
           echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
           echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
           java -version
-
+      
       - name: Patch JVM arguments for --add-opens
         run: |
           cd temurin17-binaries-* || cd temurin17-binaries
@@ -196,30 +222,44 @@ jobs:
           else
             echo "arguments.cpp not found, skipping patch"
           fi
-
+      
       - name: Build JDK
         run: |
           cd temurin17-binaries-* || cd temurin17-binaries
-          if [ -f "configure" ]; then
-            bash configure \
-              --with-boot-jdk="${{ env.BOOT_JDK }}" \
-              --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
-              --with-vendor-name="Steven" \
-              --with-vendor-version-string="Steven-17" \
-              --disable-warnings-as-errors
-            make images JOBS=8
+          
+          # 如果有build脚本
+          if [ -f "build.sh" ]; then
+            chmod +x build.sh
+            ./build.sh --jdk-version 17 --target ${{ needs.prepare.outputs.version }}
+          elif [ -f "makejdk.sh" ]; then
+            chmod +x makejdk.sh
+            ./makejdk.sh --jdk-version 17
+          else
+            # 直接编译
+            if [ -f "configure" ]; then
+              bash configure \
+                --with-boot-jdk="${{ env.BOOT_JDK }}" \
+                --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
+                --with-vendor-name="Steven" \
+                --with-vendor-version-string="Steven-17" \
+                --disable-warnings-as-errors
+              make images JOBS=8
+            fi
           fi
-
+      
       - name: Package JDK
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
+          
+          # 查找 JDK 目录
           JDK_DIR=$(find . -type d -name "jdk" | head -1)
+          
           if [ -d "$JDK_DIR" ]; then
             tar -czf "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" jdk
             sha256sum "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" > "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
           fi
-
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -235,18 +275,18 @@ jobs:
     if: |
       needs.prepare.result == 'success' &&
       (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'linux-aarch64-only' || github.event.inputs.platforms == 'linux-only')
-
+    
     steps:
       - name: Checkout Temurin JDK 17
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
-
+      
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Temurin JDK 17 Build (aarch64)"
+          echo "  Steven JDK 17 Build (aarch64)"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
@@ -254,14 +294,14 @@ jobs:
           echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}"
           echo "Platform: Linux aarch64"
           echo "=========================================="
-
+      
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android/sdk
           sudo rm -rf /opt/ghc
           df -h
-
+      
       - name: Install cross-compilation toolchain
         run: |
           sudo apt-get update
@@ -273,20 +313,23 @@ jobs:
             libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev \
             autoconf automake libtool make zip unzip ccache \
             git wget curl python3 python3-dev jq
-
+      
       - name: Download Temurin source
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           echo "Downloading Temurin JDK 17 source: $TAG"
+          
           wget -q "https://github.com/adoptium/temurin17-binaries/archive/refs/tags/${TAG}.tar.gz" \
             -O temurin17-source.tar.gz || \
           wget -q "https://github.com/adoptium/temurin17-binaries/archive/${TAG}.tar.gz" \
             -O temurin17-source.tar.gz
+          
           tar -xzf temurin17-source.tar.gz
           cd temurin17-binaries-* || cd temurin17-binaries
+          
           echo "Source downloaded successfully"
           ls -la
-
+      
       - name: Install Boot JDK 17
         run: |
           wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
@@ -294,7 +337,7 @@ jobs:
           echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
           echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
           java -version
-
+      
       - name: Patch JVM arguments for --add-opens
         run: |
           cd temurin17-binaries-* || cd temurin17-binaries
@@ -308,10 +351,11 @@ jobs:
           else
             echo "arguments.cpp not found, skipping patch"
           fi
-
+      
       - name: Build JDK (aarch64 cross-compile)
         run: |
           cd temurin17-binaries-* || cd temurin17-binaries
+          
           if [ -f "configure" ]; then
             bash configure \
               --openjdk-target=aarch64-linux-gnu \
@@ -322,17 +366,19 @@ jobs:
               --disable-warnings-as-errors
             make images JOBS=8
           fi
-
+      
       - name: Package JDK
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
+          
           JDK_DIR=$(find . -type d -name "jdk" | head -1)
+          
           if [ -d "$JDK_DIR" ]; then
             tar -czf "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" jdk
             sha256sum "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" > "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
           fi
-
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -348,34 +394,38 @@ jobs:
     if: |
       needs.prepare.result == 'success' &&
       (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'windows-only' || github.event.inputs.platforms == '')
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-
+      
       - name: Build Info
         shell: powershell
         run: |
           Write-Host "=========================================="
-          Write-Host "  Temurin JDK 17 Build"
+          Write-Host "  Steven JDK 17 Build"
           Write-Host "=========================================="
           Write-Host "Tag: ${{ needs.prepare.outputs.tag }}"
           Write-Host "Version: ${{ needs.prepare.outputs.version }}"
           Write-Host "Platform: Windows x64"
           Write-Host "=========================================="
-
+      
       - name: Download Temurin binary
         shell: powershell
         run: |
           $TAG = "${{ needs.prepare.outputs.tag }}"
           $VERSION = "${{ needs.prepare.outputs.version }}"
-          Write-Host "Downloading Temurin JDK 17: $TAG"
+          
+          Write-Host "Downloading Steven JDK 17: $TAG"
+          
+          # 从Release下载
           $Url = "https://github.com/adoptium/temurin17-binaries/releases/download/$TAG/OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip"
           Invoke-WebRequest -Uri $Url -Out "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip"
+          
           Write-Host "Download completed"
-
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -391,31 +441,34 @@ jobs:
     if: |
       needs.prepare.result == 'success' &&
       (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'macos-only' || github.event.inputs.platforms == '')
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-
+      
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Temurin JDK 17 Build"
+          echo "  Steven JDK 17 Build"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
           echo "Platform: macOS x64"
           echo "=========================================="
-
+      
       - name: Download Temurin binary
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          echo "Downloading Temurin JDK 17: $TAG"
+          
+          echo "Downloading Steven JDK 17: $TAG"
+          
           wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_x64_mac_hotspot_${VERSION}.tar.gz"
+          
           echo "Download completed"
-
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -431,21 +484,24 @@ jobs:
     if: |
       needs.prepare.result == 'success' &&
       (github.event.inputs.platforms == 'all' || github.event.inputs.platforms == '')
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-
+      
       - name: Download Temurin binary
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          echo "Downloading Temurin JDK 17: $TAG (aarch64)"
+          
+          echo "Downloading Steven JDK 17: $TAG (aarch64)"
+          
           wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_aarch64_mac_hotspot_${VERSION}.tar.gz"
+          
           echo "Download completed"
-
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -458,51 +514,53 @@ jobs:
     needs: [prepare, build-linux, build-windows, build-macos]
     if: success() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
+      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: Steven JDK 17 ${{ needs.prepare.outputs.version }}
           body: |
-            ## Steven JDK 17 Custom Build
-
-            **Build Info:**
-            - **Tag**: ${{ needs.prepare.outputs.tag }}
-            - **Version**: ${{ needs.prepare.outputs.version }}
-            - **Build Number**: ${{ needs.prepare.outputs.build_number }}
-            - **Build Type**: ${{ github.event.inputs.build_type || 'release' }}
-            - **Build Time**: ${{ github.run_started_at }}
-
-            ### Download Links
-
-            | Platform | Architecture | File |
+            ## Steven JDK 17 自动构建
+            
+            **构建信息:**
+            - **标签**: ${{ needs.prepare.outputs.tag }}
+            - **版本**: ${{ needs.prepare.outputs.version }}
+            - **构建号**: ${{ needs.prepare.outputs.build_number }}
+            - **构建类型**: ${{ github.event.inputs.build_type || 'release' }}
+            - **构建时间**: ${{ github.run_started_at }}
+            
+            ### 下载链接
+            
+            | 平台 | 架构 | 文件 |
             |------|------|------|
             | Linux | x64 | OpenJDK17U-jdk_x64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
             | Windows | x64 | OpenJDK17U-jdk_x64_windows_hotspot_${{ needs.prepare.outputs.version }}.zip |
             | macOS | x64 | OpenJDK17U-jdk_x64_mac_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
             | macOS | aarch64 | OpenJDK17U-jdk_aarch64_mac_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
-
-            ### Verification
-            All files include SHA256 checksum files.
-
-            ### Usage
-            1. Download JDK for your platform
-            2. Extract to target directory
-            3. Set JAVA_HOME environment variable
-            4. Add $JAVA_HOME/bin to PATH
-
-            ### License
+            
+            ### 验证和说明
+            所有文件都包含 SHA256 校验和文件(.sha256.txt)。
+            
+            ### 使用说明
+            
+            1. 下载对应平台的 JDK 压缩包
+            2. 解压到目标目录
+            3. 设置 JAVA_HOME 环境变量
+            4. 将$JAVA_HOME/bin 添加到 PATH
+            
+            ### 许可证
             GPLv2 with Classpath Exception
-
+            
             ---
-            **Upstream Project**: https://github.com/adoptium/temurin17-binaries
+            
+            **上游项目**: https://github.com/adoptium/temurin17-binaries
           draft: false
           prerelease: ${{ contains(github.event.inputs.tag, 'ea') || contains(github.event.inputs.tag, 'beta') }}
           files: |
