@@ -29,12 +29,6 @@ on:
           - windows-only
           - macos-only
 
-  # Push 触发：支持所有标签
-  push:
-    tags:
-      - 'jdk-17.**'  # 匹配所有jdk-17开头的标签
-      - 'jdk-17.0.*'  # 匹配所有17.0.x版本
-
   # 定时触发：每天检查新版本
   schedule:
     - cron: '0 */6 * * *'  # 每6小时检查一次
