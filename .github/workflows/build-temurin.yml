@@ -148,7 +148,7 @@ jobs:
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Steven JDK 17 Build"
+          echo "  Tansun JDK 17 Build"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
@@ -228,8 +228,8 @@ jobs:
               bash configure \
                 --with-boot-jdk="${{ env.BOOT_JDK }}" \
                 --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
-                --with-vendor-name="Steven" \
-                --with-vendor-version-string="Steven-17" \
+                --with-vendor-name="Tansun" \
+                --with-vendor-version-string="Tansun-17" \
                 --disable-warnings-as-errors
               make images JOBS=8
             fi
@@ -274,7 +274,7 @@ jobs:
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Steven JDK 17 Build (aarch64)"
+          echo "  Tansun JDK 17 Build (aarch64)"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
@@ -346,8 +346,8 @@ jobs:
               --openjdk-target=aarch64-linux-gnu \
               --with-boot-jdk="${{ env.BOOT_JDK }}" \
               --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
-              --with-vendor-name="Steven" \
-              --with-vendor-version-string="Steven-17" \
+              --with-vendor-name="Tansun" \
+              --with-vendor-version-string="Tansun-17" \
               --disable-warnings-as-errors
             make images JOBS=8
           fi
@@ -390,7 +390,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "=========================================="
-          Write-Host "  Steven JDK 17 Build"
+          Write-Host "  Tansun JDK 17 Build"
           Write-Host "=========================================="
           Write-Host "Tag: ${{ needs.prepare.outputs.tag }}"
           Write-Host "Version: ${{ needs.prepare.outputs.version }}"
@@ -403,7 +403,7 @@ jobs:
           $TAG = "${{ needs.prepare.outputs.tag }}"
           $VERSION = "${{ needs.prepare.outputs.version }}"
           
-          Write-Host "Downloading Steven JDK 17: $TAG"
+          Write-Host "Downloading Tansun JDK 17: $TAG"
           
           # 从Release下载
           $Url = "https://github.com/adoptium/temurin17-binaries/releases/download/$TAG/OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip"
@@ -436,7 +436,7 @@ jobs:
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Steven JDK 17 Build"
+          echo "  Tansun JDK 17 Build"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
@@ -448,7 +448,7 @@ jobs:
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
           
-          echo "Downloading Steven JDK 17: $TAG"
+          echo "Downloading Tansun JDK 17: $TAG"
           
           wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_x64_mac_hotspot_${VERSION}.tar.gz"
           
@@ -481,7 +481,7 @@ jobs:
           TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${{ needs.prepare.outputs.version }}"
           
-          echo "Downloading Steven JDK 17: $TAG (aarch64)"
+          echo "Downloading Tansun JDK 17: $TAG (aarch64)"
           
           wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_aarch64_mac_hotspot_${VERSION}.tar.gz"
           
@@ -510,9 +510,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          name: Steven JDK 17 ${{ needs.prepare.outputs.version }}
+          name: Tansun JDK 17 ${{ needs.prepare.outputs.version }}
           body: |
-            ## Steven JDK 17 自动构建
+            ## Tansun JDK 17 自动构建
             
             **构建信息:**
             - **标签**: ${{ needs.prepare.outputs.tag }}
