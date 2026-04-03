@@ -395,7 +395,7 @@ jobs:
         shell: powershell
         run: |
           $TAG = "${{ needs.prepare.outputs.tag }}"
-          $VERSION = "${{ needs.prepare.outputs.version }}"
+          $VERSION = "${{ needs.prepare.outputs.version }}".Replace("+", "_")
           
           Write-Host "Downloading Tansun JDK 17: $TAG"
           
