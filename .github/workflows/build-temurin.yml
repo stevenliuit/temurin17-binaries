@@ -84,12 +84,7 @@ jobs:
         run: |
           if [ -f "src/hotspot/share/runtime/arguments.cpp" ]; then
             sed -i '/add_property.*jdk.module.addopens/d' src/hotspot/share/runtime/arguments.cpp
-            sed -i '/void Arguments::parse_each_vm_init.*/i\
-  add_property("jdk.module.addopens.0", "java.base/java.lang=ALL-UNNAMED", AddProperty);\
-  add_property("jdk.module.addopens.1", "java.base/java.util=ALL-UNNAMED", AddProperty);\
-  add_property("jdk.module.addopens.2", "java.base/java.base=ALL-UNNAMED", AddProperty);\
-  add_property("jdk.module.addopens.3", "java.base/java.lang.reflect=ALL-UNNAMED", AddProperty);\
-' src/hotspot/share/runtime/arguments.cpp
+            sed -i '/void Arguments::parse_each_vm_init.*/i add_property("jdk.module.addopens.0", "java.base/java.lang=ALL-UNNAMED", AddProperty); add_property("jdk.module.addopens.1", "java.base/java.util=ALL-UNNAMED", AddProperty); add_property("jdk.module.addopens.2", "java.base/java.base=ALL-UNNAMED", AddProperty); add_property("jdk.module.addopens.3", "java.base/java.lang.reflect=ALL-UNNAMED", AddProperty);' src/hotspot/share/runtime/arguments.cpp
             echo "Patched arguments.cpp for --add-opens"
             grep -A3 "jdk.module.addopens" src/hotspot/share/runtime/arguments.cpp
           else
