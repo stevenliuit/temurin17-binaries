@@ -49,12 +49,14 @@ jobs:
       - name: Check for new Temurin 17 version
         id: check
         run: |
-          # 鑾峰彇鏈€鏂版爣绛?          LATEST_TAG=$(curl -s https://api.github.com/repos/adoptium/temurin17-binaries/tags | jq -r '.[0].name')
+          # Get latest tag
+          LATEST_TAG=$(curl -s https://api.github.com/repos/adoptium/temurin17-binaries/tags | jq -r '.[0].name')
           
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           echo "Latest Temurin 17 tag: $LATEST_TAG"
           
-          # 妫€鏌ユ槸鍚︽湁鏂扮増鏈?          if git ls-remote --tags origin | grep -q "$LATEST_TAG"; then
+          # Check if new version
+          if git ls-remote --tags origin | grep -q "$LATEST_TAG"; then
             echo "has_new_version=false" >> $GITHUB_OUTPUT
             echo "No new version"
           else
@@ -84,11 +86,13 @@ jobs:
           # 娣诲姞涓婃父
           git remote add upstream https://github.com/adoptium/temurin17-binaries.git || true
           
-          # 鑾峰彇鎵€鏈夋爣绛?          git fetch upstream --tags --force
+          # Fetch all tags
+          git fetch upstream --tags --force
           
-          # 鎺ㄩ€佹墍鏈夋爣绛?          git push origin --tags --force-with-lease
+          # Push all tags
+          git push origin --tags --force-with-lease
           
-          echo "鉁?鎵€鏈夋爣绛惧凡鍚屾"
+          echo "All tags synced"
 
   prepare:
     name: Prepare Build Info
