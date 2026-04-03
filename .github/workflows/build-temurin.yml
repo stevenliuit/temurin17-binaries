@@ -96,7 +96,6 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'push') ||
       (github.event_name == 'schedule' && needs.check-latest.outputs.has_new_version == 'true')
     outputs:
       tag: ${{ steps.info.outputs.tag }}
@@ -110,8 +109,6 @@ jobs:
           # 确定要构建的标签
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref }}"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
             TAG="${{ needs.check-latest.outputs.latest_tag }}"
           else
