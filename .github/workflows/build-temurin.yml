@@ -17,9 +17,6 @@ on:
           - fastdebug
           - debug
 
-  schedule:
-    - cron: '0 */6 * * *'
-
 jobs:
   prepare:
     name: Prepare Build Info
