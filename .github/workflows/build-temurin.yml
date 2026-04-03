@@ -1,7 +1,6 @@
-name: Build Temurin JDK 17
+name: Build Tansun JDK 17
 
 on:
-  # 手动触发
   workflow_dispatch:
     inputs:
       tag:
@@ -17,345 +16,287 @@ on:
           - release
           - fastdebug
           - debug
-      platforms:
-        description: 'Platforms to build'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - linux-only
-          - linux-aarch64-only
-          - windows-only
-          - macos-only
 
-  # 定时触发：每天检查新版本
   schedule:
-    - cron: '0 */6 * * *'  # 每6小时检查一次
+    - cron: '0 */6 * * *'
 
 jobs:
-  check-latest:
-    name: Check Latest Version
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    outputs:
-      latest_tag: ${{ steps.check.outputs.latest_tag }}
-      has_new_version: ${{ steps.check.outputs.has_new_version }}
-    
-    steps:
-      - name: Check for new Temurin 17 version
-        id: check
-        run: |
-          # 获取最新标签
-          LATEST_TAG=$(curl -s https://api.github.com/repos/adoptium/temurin17-binaries/tags | jq -r '.[0].name')
-          
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest Temurin 17 tag: $LATEST_TAG"
-          
-          # 检查是否有新版本
-          if git ls-remote --tags origin | grep -q "$LATEST_TAG"; then
-            echo "has_new_version=false" >> $GITHUB_OUTPUT
-            echo "No new version"
-          else
-            echo "has_new_version=true" >> $GITHUB_OUTPUT
-            echo "New version detected: $LATEST_TAG"
-          fi
-
-  sync-tags:
-    name: Sync All Tags from Upstream
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN || secrets.PERSONAL_TOKEN }}
-      
-      - name: Configure Git
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-      
-      - name: Sync all tags
-        run: |
-          # 添加上游
-          git remote add upstream https://github.com/adoptium/temurin17-binaries.git || true
-          
-          # 获取所有标签
-          git fetch upstream --tags --force
-          
-          # 推送所有标签
-          git push origin --tags --force-with-lease
-          
-          echo "所有标签已同步"
-
   prepare:
     name: Prepare Build Info
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'schedule' && needs.check-latest.outputs.has_new_version == 'true')
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       tag: ${{ steps.info.outputs.tag }}
       version: ${{ steps.info.outputs.version }}
       build_number: ${{ steps.info.outputs.build_number }}
-    
+
     steps:
       - name: Determine build info
         id: info
         run: |
-          # 确定要构建的标签
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-            TAG="${{ needs.check-latest.outputs.latest_tag }}"
-          else
-            TAG="${{ github.ref }}"
-          fi
-          
-          # 清理标签名称
+          TAG="${{ github.event.inputs.tag }}"
           TAG=$(echo "$TAG" | sed 's|^refs/tags/||')
-          
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Building tag: $TAG"
-          
-          # 提取版本号
           VERSION=$(echo "$TAG" | sed 's|^jdk-||' | sed 's|+|_|')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
-          
-          # 构建号
           echo "build_number=${{ github.run_number }}" >> $GITHUB_OUTPUT
 
   build-linux:
     name: Build Linux x64
     needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-20.04
+    timeout-minutes: 480
     if: needs.prepare.result == 'success'
-    
+
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 1
+
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Tansun JDK 17 Build"
+          echo "  Tansun JDK 17 Build (Linux x64)"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
-          echo "Platform: Linux x64"
           echo "=========================================="
-      
-      - name: Download Temurin binary
+
+      - name: Install dependencies
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          echo "Downloading Temurin JDK 17: $TAG"
-          
-          wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz"
-          
-          echo "Download completed"
-      
-      - name: Customize JDK
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libfreetype6-dev libcups2-dev \
+            libx11-dev libxext-dev libxrender-dev libxrandr-dev \
+            libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev \
+            autoconf automake libtool make zip unzip ccache \
+            wget curl
+
+      - name: Install Boot JDK
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
+          tar -xzf OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
+          echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
+          echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
+
+      - name: Patch JVM arguments for --add-opens
+        run: |
+          if [ -f "src/hotspot/share/runtime/arguments.cpp" ]; then
+            sed -i '/add_property.*jdk.module.addopens/d' src/hotspot/share/runtime/arguments.cpp
+            sed -i '/void Arguments::parse_each_vm_init.*/i\
+  add_property("jdk.module.addopens.0", "java.base/java.lang=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.1", "java.base/java.util=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.2", "java.base/java.base=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.3", "java.base/java.lang.reflect=ALL-UNNAMED", AddProperty);\
+' src/hotspot/share/runtime/arguments.cpp
+            echo "Patched arguments.cpp for --add-opens"
+            grep -A3 "jdk.module.addopens" src/hotspot/share/runtime/arguments.cpp
+          else
+            echo "arguments.cpp not found"
+            exit 1
+          fi
+
+      - name: Configure and build
+        run: |
+          bash configure \
+            --with-boot-jdk="${{ env.BOOT_JDK }}" \
+            --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
+            --with-vendor-name="Tansun" \
+            --with-vendor-version-string="Tansun-17" \
+            --disable-warnings-as-errors
+          make images JOBS=8
+
+      - name: Package JDK
+        run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          
-          tar -xzf "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz"
-          JDK_DIR=$(find . -type d -name "jdk*" | head -1)
-          
-          # 修改 release 文件中的 VENDOR 信息
-          if [ -f "$JDK_DIR/release" ]; then
-            sed -i 's/IMPLEMENTOR="Eclipse Adoptium"/IMPLEMENTOR="Tansun"/g' "$JDK_DIR/release"
-            sed -i 's/IMPLEMENTOR_VERSION="Temurin"/IMPLEMENTOR_VERSION="Tansun-17"/g' "$JDK_DIR/release"
-            sed -i 's/JVM_NAME="OpenJDK 64-Bit Server VM"/JVM_NAME="Tansun 64-Bit Server VM"/g' "$JDK_DIR/release"
-            echo "Modified release file"
-          fi
-          
-          # 添加 --add-opens 配置到 jvm.options
-          if [ -f "$JDK_DIR/lib/jvm.cfg" ] || [ -f "$JDK_DIR/conf/jvm.options" ]; then
-            echo "--add-opens java.base/java.lang=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.util=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.base=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.lang.reflect=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "Added --add-opens to jvm.options"
-          fi
-          
-          # 重新打包
-          tar -czf "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" "$(basename $JDK_DIR)"
-          sha256sum "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" > "OpenJDK17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
-          
-          echo "Package created successfully"
-      
+          JDK_DIR=$(find . -type d -name "jdk" | head -1)
+          tar -czf "Tansun17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" jdk
+          sha256sum "Tansun17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz" > "Tansun17U-jdk_x64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Temurin17-linux-x64-${{ needs.prepare.outputs.version }}
-          path: OpenJDK17U-jdk_x64_linux_hotspot_*.tar.gz
+          name: Tansun17-linux-x64-${{ needs.prepare.outputs.version }}
+          path: Tansun17U-jdk_x64_linux_hotspot_*.tar.gz
           retention-days: 90
 
   build-linux-aarch64:
     name: Build Linux aarch64
     needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-20.04
+    timeout-minutes: 480
     if: needs.prepare.result == 'success'
-    
+
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 1
+
       - name: Build Info
         run: |
           echo "=========================================="
-          echo "  Tansun JDK 17 Build (aarch64)"
+          echo "  Tansun JDK 17 Build (Linux aarch64)"
           echo "=========================================="
           echo "Tag: ${{ needs.prepare.outputs.tag }}"
           echo "Version: ${{ needs.prepare.outputs.version }}"
-          echo "Platform: Linux aarch64"
           echo "=========================================="
-      
-      - name: Download Temurin binary
+
+      - name: Install cross-compilation toolchain
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          echo "Downloading Temurin JDK 17: $TAG (aarch64)"
-          
-          wget -q "https://github.com/adoptium/temurin17-binaries/releases/download/${TAG}/OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz"
-          
-          echo "Download completed"
-      
-      - name: Customize JDK
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            build-essential libfreetype6-dev libcups2-dev \
+            libx11-dev libxext-dev libxrender-dev libxrandr-dev \
+            libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev \
+            autoconf automake libtool make zip unzip ccache \
+            wget curl
+
+      - name: Install Boot JDK
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
+          tar -xzf OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
+          echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
+          echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
+
+      - name: Patch JVM arguments for --add-opens
+        run: |
+          if [ -f "src/hotspot/share/runtime/arguments.cpp" ]; then
+            sed -i '/add_property.*jdk.module.addopens/d' src/hotspot/share/runtime/arguments.cpp
+            sed -i '/void Arguments::parse_each_vm_init.*/i\
+  add_property("jdk.module.addopens.0", "java.base/java.lang=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.1", "java.base/java.util=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.2", "java.base/java.base=ALL-UNNAMED", AddProperty);\
+  add_property("jdk.module.addopens.3", "java.base/java.lang.reflect=ALL-UNNAMED", AddProperty);\
+' src/hotspot/share/runtime/arguments.cpp
+            echo "Patched arguments.cpp for --add-opens"
+          else
+            echo "arguments.cpp not found"
+            exit 1
+          fi
+
+      - name: Configure and build
+        run: |
+          bash configure \
+            --openjdk-target=aarch64-linux-gnu \
+            --with-boot-jdk="${{ env.BOOT_JDK }}" \
+            --with-debug-level=${{ github.event.inputs.build_type || 'release' }} \
+            --with-vendor-name="Tansun" \
+            --with-vendor-version-string="Tansun-17" \
+            --disable-warnings-as-errors
+          make images JOBS=8
+
+      - name: Package JDK
+        run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          
-          tar -xzf "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz"
-          JDK_DIR=$(find . -type d -name "jdk*" | head -1)
-          
-          # 修改 release 文件中的 VENDOR 信息
-          if [ -f "$JDK_DIR/release" ]; then
-            sed -i 's/IMPLEMENTOR="Eclipse Adoptium"/IMPLEMENTOR="Tansun"/g' "$JDK_DIR/release"
-            sed -i 's/IMPLEMENTOR_VERSION="Temurin"/IMPLEMENTOR_VERSION="Tansun-17"/g' "$JDK_DIR/release"
-            sed -i 's/JVM_NAME="OpenJDK 64-Bit Server VM"/JVM_NAME="Tansun 64-Bit Server VM"/g' "$JDK_DIR/release"
-            echo "Modified release file"
-          fi
-          
-          # 添加 --add-opens 配置到 jvm.options
-          if [ -f "$JDK_DIR/lib/jvm.cfg" ] || [ -f "$JDK_DIR/conf/jvm.options" ]; then
-            echo "--add-opens java.base/java.lang=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.util=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.base=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "--add-opens java.base/java.lang.reflect=ALL-UNNAMED" >> "$JDK_DIR/conf/jvm.options"
-            echo "Added --add-opens to jvm.options"
-          fi
-          
-          # 重新打包
-          tar -czf "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" "$(basename $JDK_DIR)"
-          sha256sum "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" > "OpenJDK17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
-          
-          echo "Package created successfully"
-      
+          JDK_DIR=$(find . -type d -name "jdk" | head -1)
+          tar -czf "Tansun17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" -C "$(dirname $JDK_DIR)" jdk
+          sha256sum "Tansun17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz" > "Tansun17U-jdk_aarch64_linux_hotspot_${VERSION}.tar.gz.sha256.txt"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Temurin17-linux-aarch64-${{ needs.prepare.outputs.version }}
-          path: OpenJDK17U-jdk_aarch64_linux_hotspot_*.tar.gz
+          name: Tansun17-linux-aarch64-${{ needs.prepare.outputs.version }}
+          path: Tansun17U-jdk_aarch64_linux_hotspot_*.tar.gz
           retention-days: 90
 
   build-windows:
     name: Build Windows x64
     needs: prepare
     runs-on: windows-2022
-    timeout-minutes: 360
+    timeout-minutes: 480
     if: needs.prepare.result == 'success'
-    
+
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-      
+          fetch-depth: 1
+
       - name: Build Info
         shell: powershell
         run: |
           Write-Host "=========================================="
-          Write-Host "  Tansun JDK 17 Build"
+          Write-Host "  Tansun JDK 17 Build (Windows x64)"
           Write-Host "=========================================="
           Write-Host "Tag: ${{ needs.prepare.outputs.tag }}"
           Write-Host "Version: ${{ needs.prepare.outputs.version }}"
-          Write-Host "Platform: Windows x64"
           Write-Host "=========================================="
-      
-      - name: Download Temurin binary
+
+      - name: Install dependencies
         shell: powershell
         run: |
-          $TAG = "${{ needs.prepare.outputs.tag }}"
-          $VERSION = "${{ needs.prepare.outputs.version }}"
-          
-          Write-Host "Downloading Tansun JDK 17: $TAG"
-          
-          # 从Release下载
-          $Url = "https://github.com/adoptium/temurin17-binaries/releases/download/$TAG/OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip"
-          Invoke-WebRequest -Uri $Url -Out "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip"
-          
-          Write-Host "Download completed"
-      
-      - name: Customize JDK
+          Invoke-WebRequest -Uri "https://download.bell-sw.com/java/17.0.9+9/openjdk-17.0.9+9_windows-x64_bin.zip" -OutFile "bootjdk.zip"
+          Expand-Archive -Path bootjdk.zip -DestinationPath . -Force
+          $env:BOOT_JDK = "$PWD\jdk-17.0.9+9"
+          $env:PATH = "$env:BOOT_JDK\bin;$env:PATH"
+          echo "BOOT_JDK=$env:BOOT_JDK" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          java -version
+
+      - name: Patch JVM arguments for --add-opens
         shell: powershell
         run: |
-          $TAG = "${{ needs.prepare.outputs.tag }}"
+          $file = "src\hotspot\share\runtime\arguments.cpp"
+          if (Test-Path $file) {
+            $content = Get-Content $file -Raw
+            $content = $content -replace '(add_property\("jdk\.module\.addopens.*?",.*?\);', ''
+            $content = $content -replace '(void Arguments::parse_each_vm_init\*)', "`n  add_property(`"jdk.module.addopens.0`", `"java.base/java.lang=ALL-UNNAMED`", AddProperty);`n  add_property(`"jdk.module.addopens.1`", `"java.base/java.util=ALL-UNNAMED`", AddProperty);`n  add_property(`"jdk.module.addopens.2`", `"java.base/java.base=ALL-UNNAMED`", AddProperty);`n  add_property(`"jdk.module.addopens.3`", `"java.base/java.lang.reflect=ALL-UNNAMED`", AddProperty);`n`$1"
+            Set-Content -Path $file -Value $content -NoNewline
+            Write-Host "Patched arguments.cpp for --add-opens"
+          } else {
+            Write-Host "arguments.cpp not found"
+            exit 1
+          }
+
+      - name: Configure and build
+        shell: powershell
+        run: |
+          $env:BOOT_JDK = "$PWD\jdk-17.0.9+9"
+          $env:PATH = "$env:BOOT_JDK\bin;$env:PATH"
+          $version = "${{ needs.prepare.outputs.version }}"
+          bash configure `
+            --with-boot-jdk="$env:BOOT_JDK" `
+            --with-debug-level=${{ github.event.inputs.build_type || 'release' }} `
+            --with-vendor-name="Tansun" `
+            --with-vendor-version-string="Tansun-17" `
+            --disable-warnings-as-errors
+          make images JOBS=8
+
+      - name: Package JDK
+        shell: powershell
+        run: |
           $VERSION = "${{ needs.prepare.outputs.version }}"
-          
-          # 解压
-          Expand-Archive -Path "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip" -DestinationPath "." -Force
           $JDK_DIR = Get-ChildItem -Directory | Where-Object { $_.Name -like "jdk*" } | Select-Object -First 1
-          
-          # 修改 release 文件中的 VENDOR 信息
-          if (Test-Path "$JDK_DIR\release") {
-            (Get-Content "$JDK_DIR\release") -replace 'IMPLEMENTOR="Eclipse Adoptium"', 'IMPLEMENTOR="Tansun"' | Set-Content "$JDK_DIR\release"
-            (Get-Content "$JDK_DIR\release") -replace 'IMPLEMENTOR_VERSION="Temurin"', 'IMPLEMENTOR_VERSION="Tansun-17"' | Set-Content "$JDK_DIR\release"
-            (Get-Content "$JDK_DIR\release") -replace 'JVM_NAME="OpenJDK 64-Bit Server VM"', 'JVM_NAME="Tansun 64-Bit Server VM"' | Set-Content "$JDK_DIR\release"
-            Write-Host "Modified release file"
-          }
-          
-          # 添加 --add-opens 配置到 jvm.options
-          $JVM_OPTS = "$JDK_DIR\lib\jvm.cfg"
-          if (Test-Path "$JDK_DIR\conf\jvm.options") {
-            $JVM_OPTS = "$JDK_DIR\conf\jvm.options"
-          }
-          if (Test-Path $JVM_OPTS) {
-            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.lang=ALL-UNNAMED"
-            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.util=ALL-UNNAMED"
-            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.base=ALL-UNNAMED"
-            Add-Content -Path $JVM_OPTS -Value "--add-opens java.base/java.lang.reflect=ALL-UNNAMED"
-            Write-Host "Added --add-opens to jvm.options"
-          }
-          
-          # 重新打包
-          Compress-Archive -Path "$JDK_DIR\*" -DestinationPath "OpenJDK17U-jdk_x64_windows_hotspot_$VERSION.zip" -Force
-          
-          Write-Host "Package created successfully"
-      
+          Compress-Archive -Path "$JDK_DIR\*" -DestinationPath "Tansun17U-jdk_x64_windows_hotspot_$VERSION.zip" -Force
+          (Get-FileHash "Tansun17U-jdk_x64_windows_hotspot_$VERSION.zip" -Algorithm SHA256 | Select-Object -ExpandProperty Hash) + "  Tansun17U-jdk_x64_windows_hotspot_$VERSION.zip" | Out-File "Tansun17U-jdk_x64_windows_hotspot_$VERSION.zip.sha256.txt"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Temurin17-windows-x64-${{ needs.prepare.outputs.version }}
-          path: OpenJDK17U-jdk_x64_windows_hotspot_*.zip
+          name: Tansun17-windows-x64-${{ needs.prepare.outputs.version }}
+          path: Tansun17U-jdk_x64_windows_hotspot_*.zip
           retention-days: 90
 
   create-release:
     name: Create Release
     needs: [prepare, build-linux, build-windows, build-linux-aarch64]
-    if: success() && github.event_name != 'schedule'
+    if: success() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -369,31 +310,23 @@ jobs:
             - **版本**: ${{ needs.prepare.outputs.version }}
             - **构建号**: ${{ needs.prepare.outputs.build_number }}
             - **构建类型**: ${{ github.event.inputs.build_type || 'release' }}
-            - **构建时间**: ${{ github.run_started_at }}
+            
+            **特性:**
+            - 自定义品牌: Tansun
+            - 内置 --add-opens 配置 (java.lang, java.util, java.base, java.lang.reflect)
             
             ### 下载链接
             
             | 平台 | 架构 | 文件 |
             |------|------|------|
-            | Linux | x64 | OpenJDK17U-jdk_x64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
-            | Linux | aarch64 | OpenJDK17U-jdk_aarch64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
-            | Windows | x64 | OpenJDK17U-jdk_x64_windows_hotspot_${{ needs.prepare.outputs.version }}.zip |
-            
-            ### 验证和说明
-            所有文件都包含 SHA256 校验和文件(.sha256.txt)。
-            
-            ### 使用说明
-            
-            1. 下载对应平台的 JDK 压缩包
-            2. 解压到目标目录
-            3. 设置 JAVA_HOME 环境变量
-            4. 将$JAVA_HOME/bin 添加到 PATH
+            | Linux | x64 | Tansun17U-jdk_x64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
+            | Linux | aarch64 | Tansun17U-jdk_aarch64_linux_hotspot_${{ needs.prepare.outputs.version }}.tar.gz |
+            | Windows | x64 | Tansun17U-jdk_x64_windows_hotspot_${{ needs.prepare.outputs.version }}.zip |
             
             ### 许可证
             GPLv2 with Classpath Exception
             
             ---
-            
             **上游项目**: https://github.com/adoptium/temurin17-binaries
           draft: false
           prerelease: ${{ contains(github.event.inputs.tag, 'ea') || contains(github.event.inputs.tag, 'beta') }}
