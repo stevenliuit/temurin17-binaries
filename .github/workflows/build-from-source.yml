@@ -27,14 +27,14 @@ on:
     branches:
       - main
     tags:
-      - jdk-17-src-*
+      -  ' jdk-17-src-* ' 
 
 jobs:
   build-linux-x64:
     name: Build Linux x64 (Source)
     runs-on: ubuntu-20.04
     timeout-minutes: 600
-    if: contains(inputs.platforms,  ' linux-x64 ' ) || inputs.platforms ==  '  ' 
+    if: github.event_name ==  ' workflow_dispatch '  && contains(inputs.platforms,  ' linux-x64 ' ) || github.event_name ==  ' push ' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
     name: Build Linux aarch64 (Source)
     runs-on: ubuntu-20.04
     timeout-minutes: 600
-    if: contains(inputs.platforms,  ' linux-aarch64 ' )
+    if: github.event_name ==  ' workflow_dispatch '  && contains(inputs.platforms,  ' linux-aarch64 ' ) || github.event_name ==  ' push ' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
@@ -131,7 +131,7 @@ jobs:
     name: Build Windows x64 (Source)
     runs-on: windows-2022
     timeout-minutes: 600
-    if: contains(inputs.platforms,  ' windows-x64 ' )
+    if: github.event_name ==  ' workflow_dispatch '  && contains(inputs.platforms,  ' windows-x64 ' ) || github.event_name ==  ' push ' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
@@ -151,10 +151,10 @@ jobs:
         run: |
           curl -L -o OpenJDK17.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip
           Expand-Archive -Path OpenJDK17.zip -DestinationPath .
-          Get-ChildItem -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1 | ForEach-Object {
-            $env:BOOT_JDK = $_.FullName
-            "BOOT_JDK=$(\$_.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-            "$(\$env:BOOT_JDK)\bin" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
+          $dir = Get-ChildItem -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1
+          if ($dir) {
+            "BOOT_JDK=$($dir.FullName)"" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+            "$($dir.FullName)\bin" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
           }
       - name: Install build dependencies
         shell: powershell
@@ -163,14 +163,13 @@ jobs:
         shell: powershell
         run: |
           Set-Location jdk17u
-          $env:Path = "$(\$env:BOOT_JDK)\bin;$(\$env:Path)"
-          ..\temurin-build\makejdk-any-platform.ps1 -J "$(\$env:BOOT_JDK)" -Variant hotspot -DisableShallowClone
+          ..\temurin-build\makejdk-any-platform.ps1 -J "$($env:BOOT_JDK)"" -Variant hotspot -DisableShallowClone
       - name: Package JDK
         shell: powershell
         run: |
           $JDK_DIR = Get-ChildItem -Path jdk17u\build -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1
           if ($JDK_DIR) {
-            Compress-Archive -Path "$(\$JDK_DIR.FullName)\*" -DestinationPath "..\OpenJDK17U-jdk_x64_windows_hotspot_17.0.9.zip"
+            Compress-Archive -Path "$($JDK_DIR.FullName)\*" -DestinationPath "..\OpenJDK17U-jdk_x64_windows_hotspot_17.0.9.zip"
           }
       - name: Upload artifact
         uses: actions/upload-artifact@v4
