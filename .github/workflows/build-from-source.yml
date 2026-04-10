@@ -27,7 +27,7 @@ on:
     branches:
       - main
     tags:
-      -  ' jdk-17-src-* ' 
+      - jdk-17-src-*
 
 jobs:
   build-linux-x64:
