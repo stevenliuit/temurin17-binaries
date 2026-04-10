@@ -11,8 +11,6 @@ on:
         options:
           - linux-x64
           - linux-x64,linux-aarch64
-          - linux-x64,windows-x64
-          - linux-x64,linux-aarch64,windows-x64
 
   push:
     branches:
@@ -116,55 +114,4 @@ jobs:
         with:
           name: Temurin17-JDK17-linux-aarch64
           path: OpenJDK17U-jdk_aarch64_linux_hotspot_*.tar.gz
-          retention-days: 30
-
-  build-windows-x64:
-    name: Build Windows x64 (Source)
-    runs-on: windows-2022
-    timeout-minutes: 600
-    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'windows-x64') || github.event_name == 'push' 
-    steps:
-      - name: Checkout temurin-build scripts
-        uses: actions/checkout@v4
-        with:
-          repository: adoptium/temurin-build
-          path: temurin-build
-          fetch-depth: 1
-      - name: Checkout JDK 17 source
-        uses: actions/checkout@v4
-        with:
-          repository: adoptium/jdk17u
-          ref: master
-          path: jdk17u
-          fetch-depth: 1
-      - name: Install Boot JDK 17
-        shell: powershell
-        run: |
-          curl -L -o OpenJDK17.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip
-          Expand-Archive -Path OpenJDK17.zip -DestinationPath .
-          $dir = Get-ChildItem -Directory | Where-Object { $_.Name -like 'jdk*' } | Select-Object -First 1
-          if ($dir) {
-            "BOOT_JDK=$($dir.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-            "$($dir.FullName)\bin" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
-          }
-      - name: Install build dependencies
-        shell: powershell
-        run: choco install -y ninja cmake openssl wixtoolset
-      - name: Build JDK
-        shell: powershell
-        run: |
-          Set-Location jdk17u
-          .\temurin-build\makejdk-any-platform.ps1 -J "$($env:BOOT_JDK)" -Variant hotspot -DisableShallowClone
-      - name: Package JDK
-        shell: powershell
-        run: |
-          $JDK_DIR = Get-ChildItem -Path jdk17u\build -Directory | Where-Object { $_.Name -like 'jdk*' } | Select-Object -First 1
-          if ($JDK_DIR) {
-            Compress-Archive -Path "$($JDK_DIR.FullName)\*" -DestinationPath "..\OpenJDK17U-jdk_x64_windows_hotspot_17.0.9.zip"
-          }
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Temurin17-JDK17-windows-x64
-          path: OpenJDK17U-jdk_x64_windows_hotspot_*.zip
           retention-days: 30
