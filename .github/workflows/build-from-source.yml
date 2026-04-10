@@ -19,8 +19,9 @@ on:
         type: choice
         options:
           - linux-x64
+          - linux-x64,linux-aarch64
           - linux-x64,windows-x64
-          - linux-x64,macos-x64
+          - linux-x64,linux-aarch64,windows-x64
 
   push:
     branches:
@@ -33,7 +34,7 @@ jobs:
     name: Build Linux x64 (Source)
     runs-on: ubuntu-20.04
     timeout-minutes: 600
-    
+    if: contains(inputs.platforms,  ' linux-x64 ' ) || inputs.platforms ==  '  ' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
@@ -41,7 +42,6 @@ jobs:
           repository: adoptium/temurin-build
           path: temurin-build
           fetch-depth: 1
-      
       - name: Checkout JDK 17 source
         uses: actions/checkout@v4
         with:
@@ -49,35 +49,21 @@ jobs:
           ref: master
           path: jdk17u
           fetch-depth: 1
-      
       - name: Install Boot JDK 17
         run: |
           wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
           tar -xzf OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
           echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
           echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
-      
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential libfreetype6-dev libcups2-dev \
-            libx11-dev libxext-dev libxrender-dev libxrandr-dev \
-            libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev \
-            autoconf automake libtool make zip unzip ccache \
-            git wget curl python3
-      
+          sudo apt-get install -y build-essential libfreetype6-dev libcups2-dev libx11-dev libxext-dev libxrender-dev libxrandr-dev libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev autoconf automake libtool make zip unzip ccache git wget curl python3
       - name: Build JDK
         run: |
           cd jdk17u
           chmod +x ../temurin-build/makejdk-any-platform.sh
-          ../temurin-build/makejdk-any-platform.sh \
-            -J "$BOOT_JDK" \
-            --build-variant hotspot \
-            --build-number b$(date +%Y%m%d%H%M) \
-            --disable-shallow-git-clone \
-            jdk17u
-      
+          ../temurin-build/makejdk-any-platform.sh -J "$BOOT_JDK" --build-variant hotspot --build-number b$(date +%Y%m%d%H%M) --disable-shallow-git-clone jdk17u
       - name: Package JDK
         run: |
           cd jdk17u
@@ -85,10 +71,110 @@ jobs:
           if [ -d "$JDK_DIR" ]; then
             tar -czf ../OpenJDK17U-jdk_x64_linux_hotspot_17.0.9+$(date +%Y%m%d%H%M).tar.gz -C "$(dirname $JDK_DIR)" jdk
           fi
-      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Temurin17-JDK17-linux-x64
           path: OpenJDK17U-jdk_x64_linux_hotspot_*.tar.gz
+          retention-days: 30
+
+  build-linux-aarch64:
+    name: Build Linux aarch64 (Source)
+    runs-on: ubuntu-20.04
+    timeout-minutes: 600
+    if: contains(inputs.platforms,  ' linux-aarch64 ' )
+    steps:
+      - name: Checkout temurin-build scripts
+        uses: actions/checkout@v4
+        with:
+          repository: adoptium/temurin-build
+          path: temurin-build
+          fetch-depth: 1
+      - name: Checkout JDK 17 source
+        uses: actions/checkout@v4
+        with:
+          repository: adoptium/jdk17u
+          ref: master
+          path: jdk17u
+          fetch-depth: 1
+      - name: Install Boot JDK 17
+        run: |
+          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.9_9.tar.gz
+          tar -xzf OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.9_9.tar.gz
+          echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
+          echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libfreetype6-dev libcups2-dev libx11-dev libxext-dev libxrender-dev libxrandr-dev libxtst-dev libasound2-dev libffi-dev libfontconfig1-dev autoconf automake libtool make zip unzip ccache crossbuild-essential-arm64 git wget curl python3
+      - name: Build JDK
+        run: |
+          cd jdk17u
+          chmod +x ../temurin-build/makejdk-any-platform.sh
+          ./configure --openjdk-target=aarch64-linux-gnu --with-boot-jdk="$BOOT_JDK"
+          make images JOBS=$(nproc)
+      - name: Package JDK
+        run: |
+          cd jdk17u
+          JDK_DIR=$(find build -type d -name "jdk*" 2>/dev/null | head -1)
+          if [ -d "$JDK_DIR" ]; then
+            tar -czf ../OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.9+$(date +%Y%m%d%H%M).tar.gz -C "$(dirname $JDK_DIR)" jdk
+          fi
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Temurin17-JDK17-linux-aarch64
+          path: OpenJDK17U-jdk_aarch64_linux_hotspot_*.tar.gz
+          retention-days: 30
+
+  build-windows-x64:
+    name: Build Windows x64 (Source)
+    runs-on: windows-2022
+    timeout-minutes: 600
+    if: contains(inputs.platforms,  ' windows-x64 ' )
+    steps:
+      - name: Checkout temurin-build scripts
+        uses: actions/checkout@v4
+        with:
+          repository: adoptium/temurin-build
+          path: temurin-build
+          fetch-depth: 1
+      - name: Checkout JDK 17 source
+        uses: actions/checkout@v4
+        with:
+          repository: adoptium/jdk17u
+          ref: master
+          path: jdk17u
+          fetch-depth: 1
+      - name: Install Boot JDK 17
+        shell: powershell
+        run: |
+          curl -L -o OpenJDK17.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip
+          Expand-Archive -Path OpenJDK17.zip -DestinationPath .
+          Get-ChildItem -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1 | ForEach-Object {
+            $env:BOOT_JDK = $_.FullName
+            "BOOT_JDK=$(\$_.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+            "$(\$env:BOOT_JDK)\bin" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
+          }
+      - name: Install build dependencies
+        shell: powershell
+        run: choco install -y ninja cmake openssl wixtoolset
+      - name: Build JDK
+        shell: powershell
+        run: |
+          Set-Location jdk17u
+          $env:Path = "$(\$env:BOOT_JDK)\bin;$(\$env:Path)"
+          ..\temurin-build\makejdk-any-platform.ps1 -J "$(\$env:BOOT_JDK)" -Variant hotspot -DisableShallowClone
+      - name: Package JDK
+        shell: powershell
+        run: |
+          $JDK_DIR = Get-ChildItem -Path jdk17u\build -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1
+          if ($JDK_DIR) {
+            Compress-Archive -Path "$(\$JDK_DIR.FullName)\*" -DestinationPath "..\OpenJDK17U-jdk_x64_windows_hotspot_17.0.9.zip"
+          }
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Temurin17-JDK17-windows-x64
+          path: OpenJDK17U-jdk_x64_windows_hotspot_*.zip
           retention-days: 30
