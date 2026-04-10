@@ -3,15 +3,6 @@ name: Build Temurin JDK 17 from Source
 on:
   workflow_dispatch:
     inputs:
-      build_type:
-        description: Build type
-        required: false
-        default: release
-        type: choice
-        options:
-          - release
-          - fastdebug
-          - debug
       platforms:
         description: Platforms to build
         required: false
@@ -151,9 +142,9 @@ jobs:
         run: |
           curl -L -o OpenJDK17.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip
           Expand-Archive -Path OpenJDK17.zip -DestinationPath .
-          $dir = Get-ChildItem -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1
+          $dir = Get-ChildItem -Directory | Where-Object { $_.Name -like 'jdk*' } | Select-Object -First 1
           if ($dir) {
-            "BOOT_JDK=$($dir.FullName)"" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+            "BOOT_JDK=$($dir.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
             "$($dir.FullName)\bin" | Add-Content -Path $env:GITHUB_PATH -Encoding utf8
           }
       - name: Install build dependencies
@@ -163,11 +154,11 @@ jobs:
         shell: powershell
         run: |
           Set-Location jdk17u
-          ..\temurin-build\makejdk-any-platform.ps1 -J "$($env:BOOT_JDK)"" -Variant hotspot -DisableShallowClone
+          .\temurin-build\makejdk-any-platform.ps1 -J "$($env:BOOT_JDK)" -Variant hotspot -DisableShallowClone
       - name: Package JDK
         shell: powershell
         run: |
-          $JDK_DIR = Get-ChildItem -Path jdk17u\build -Directory | Where-Object { $_.Name -like  ' jdk* '  } | Select-Object -First 1
+          $JDK_DIR = Get-ChildItem -Path jdk17u\build -Directory | Where-Object { $_.Name -like 'jdk*' } | Select-Object -First 1
           if ($JDK_DIR) {
             Compress-Archive -Path "$($JDK_DIR.FullName)\*" -DestinationPath "..\OpenJDK17U-jdk_x64_windows_hotspot_17.0.9.zip"
           }
