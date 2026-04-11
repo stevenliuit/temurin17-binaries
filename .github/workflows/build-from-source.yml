@@ -12,18 +12,11 @@ on:
           - linux-x64
           - linux-x64,linux-aarch64
 
-  push:
-    branches:
-      - main
-    tags:
-      - jdk-17-src-*
-
 jobs:
   build-linux-x64:
     name: Build Linux x64 (Source)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 600
-    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'linux-x64') || github.event_name == 'push' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
@@ -69,9 +62,8 @@ jobs:
 
   build-linux-aarch64:
     name: Build Linux aarch64 (Source)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 600
-    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'linux-aarch64') || github.event_name == 'push' 
     steps:
       - name: Checkout temurin-build scripts
         uses: actions/checkout@v4
