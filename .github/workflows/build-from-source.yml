@@ -89,10 +89,18 @@ jobs:
           tar -xzf OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
           echo "BOOT_JDK=$PWD/jdk-17.0.9+9" >> $GITHUB_ENV
           echo "$PWD/jdk-17.0.9+9/bin" >> $GITHUB_PATH
-      - name: Install build dependencies
+      - name: Install build dependencies for cross-compilation
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libfreetype6-dev libcups2-dev libx11-dev libxext-dev libxrender-dev libxrandr-dev libxtst-dev libxt-dev libasound2-dev libffi-dev libfontconfig1-dev autoconf automake libtool make zip unzip ccache crossbuild-essential-arm64 git wget curl python3
+          sudo apt-get install -y \
+            build-essential libfreetype6-dev libcups2-dev \
+            libx11-dev:arm64 libxext-dev:arm64 libxrender-dev:arm64 \
+            libxrandr-dev:arm64 libxtst-dev:arm64 libxt-dev:arm64 \
+            libasound2-dev:arm64 libffi-dev:arm64 libfontconfig1-dev:arm64 \
+            autoconf automake libtool make zip unzip ccache \
+            crossbuild-essential-arm64 \
+            binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            git wget curl python3
       - name: Build JDK
         run: |
           cd jdk17u
