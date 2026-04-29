@@ -104,7 +104,11 @@ jobs:
         run: |
           cd jdk17u
           chmod +x configure
-          bash configure --openjdk-target=aarch64-linux-gnu --with-boot-jdk="$BOOT_JDK" --disable-warnings-as-errors
+          bash configure \
+            --openjdk-target=aarch64-linux-gnu \
+            --with-boot-jdk="$BOOT_JDK" \
+            --disable-warnings-as-errors \
+            --with-x=no
           make images JOBS=$(nproc)
       - name: Package JDK
         run: |
