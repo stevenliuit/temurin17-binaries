@@ -94,9 +94,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential libfreetype6-dev libcups2-dev \
-            libx11-dev:arm64 libxext-dev:arm64 libxrender-dev:arm64 \
-            libxrandr-dev:arm64 libxtst-dev:arm64 libxt-dev:arm64 \
-            libasound2-dev:arm64 libffi-dev:arm64 libfontconfig1-dev:arm64 \
+            libx11-dev libxext-dev libxrender-dev libxrandr-dev libxtst-dev libxt-dev \
+            libasound2-dev libffi-dev libfontconfig1-dev \
             autoconf automake libtool make zip unzip ccache \
             crossbuild-essential-arm64 \
             binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
