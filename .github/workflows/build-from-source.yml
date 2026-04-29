@@ -44,8 +44,9 @@ jobs:
       - name: Build JDK
         run: |
           cd jdk17u
-          chmod +x ../temurin-build/makejdk-any-platform.sh
-          ../temurin-build/makejdk-any-platform.sh -J "$BOOT_JDK" --build-variant hotspot --build-number b$(date +%Y%m%d%H%M) --disable-shallow-git-clone jdk17u
+          chmod +x configure
+          bash configure --with-boot-jdk="$BOOT_JDK" --disable-warnings-as-errors
+          make images JOBS=$(nproc)
       - name: Package JDK
         run: |
           cd jdk17u
@@ -91,8 +92,8 @@ jobs:
       - name: Build JDK
         run: |
           cd jdk17u
-          chmod +x ../temurin-build/makejdk-any-platform.sh
-          ./configure --openjdk-target=aarch64-linux-gnu --with-boot-jdk="$BOOT_JDK"
+          chmod +x configure
+          bash configure --openjdk-target=aarch64-linux-gnu --with-boot-jdk="$BOOT_JDK" --disable-warnings-as-errors
           make images JOBS=$(nproc)
       - name: Package JDK
         run: |
