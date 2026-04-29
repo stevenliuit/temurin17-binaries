@@ -108,7 +108,7 @@ jobs:
             --openjdk-target=aarch64-linux-gnu \
             --with-boot-jdk="$BOOT_JDK" \
             --disable-warnings-as-errors \
-            --with-x=no
+            --disable-headless
           make images JOBS=$(nproc)
       - name: Package JDK
         run: |
