@@ -50,9 +50,13 @@ jobs:
       - name: Package JDK
         run: |
           cd jdk17u
-          JDK_DIR=$(find build -type d -name "jdk*" 2>/dev/null | head -1)
+          JDK_DIR=$(find build -type d -path "*/images/jdk" 2>/dev/null | head -1)
+          echo "JDK_DIR=$JDK_DIR"
           if [ -d "$JDK_DIR" ]; then
             tar -czf ../OpenJDK17U-jdk_x64_linux_hotspot_17.0.9+$(date +%Y%m%d%H%M).tar.gz -C "$(dirname $JDK_DIR)" jdk
+          else
+            echo "JDK directory not found"
+            ls -la build/
           fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -98,9 +102,13 @@ jobs:
       - name: Package JDK
         run: |
           cd jdk17u
-          JDK_DIR=$(find build -type d -name "jdk*" 2>/dev/null | head -1)
+          JDK_DIR=$(find build -type d -path "*/images/jdk" 2>/dev/null | head -1)
+          echo "JDK_DIR=$JDK_DIR"
           if [ -d "$JDK_DIR" ]; then
             tar -czf ../OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.9+$(date +%Y%m%d%H%M).tar.gz -C "$(dirname $JDK_DIR)" jdk
+          else
+            echo "JDK directory not found"
+            ls -la build/
           fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
